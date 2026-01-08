@@ -1,4 +1,4 @@
-import { Form, Input } from "antd"
+import { Form, Input } from 'antd'
 
 export const Login = () => {
   const [form] = Form.useForm()
