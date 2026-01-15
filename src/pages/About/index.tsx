@@ -18,10 +18,13 @@ export const About: FC = () => {
         style={{ maxWidth: 600 }}
         autoComplete="off"
       >
+        <Form.Item name="password">
+          <Input placeholder="请输入密码" allowClear></Input>
+        </Form.Item>
         <Form.List name="users">
           {(fields, { add, remove }) => (
             <>
-              {fields.map(({ key, name, ...restField }) => (
+              {fields.map(({ key, name, ...restField }, index) => (
                 <Space
                   key={key}
                   style={{ display: 'flex', marginBottom: 8 }}
@@ -42,9 +45,11 @@ export const About: FC = () => {
                     <Input placeholder="Last Name" />
                   </Form.Item>
                   <Icon
+                    className="text-[20px]"
                     icon="subway:subtraction"
                     onClick={() => remove(name)}
                   />
+                  <span>{index}</span>
                 </Space>
               ))}
               <Form.Item>
@@ -52,7 +57,12 @@ export const About: FC = () => {
                   type="dashed"
                   onClick={() => add()}
                   block
-                  icon={<Icon icon="ant-design:plus-outlined" />}
+                  icon={
+                    <Icon
+                      icon="ant-design:plus-outlined"
+                      className="text-[20px]"
+                    />
+                  }
                 >
                   Add field
                 </Button>
