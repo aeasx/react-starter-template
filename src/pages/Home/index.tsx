@@ -1,83 +1,109 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // ...existing code...
-import { Button, Card, Form, Input, Switch } from 'antd'
+import { Button, Card, Col, Form, Input, Row, Switch } from 'antd'
 import { useEffect, useState, type FC, forwardRef, useImperativeHandle, useRef } from 'react'
+const apiResult = { 1: '1', 2: '0', 3: '1', 4: '0' }
 const getPortConfigApi = () => {
-  return new Promise<boolean[]>(resolve => {
+  return new Promise<Record<number, string>>(resolve => {
     return setTimeout(() => {
-      resolve([true, true, false, true])
+      resolve(apiResult)
     }, 300)
   })
 }
+interface IPortListItem { port: number; open: boolean }
 export const Home: FC = () => {
-  const [goodsList, setGoodsList] = useState<boolean[]>([])
+  const [goodsList, setGoodsList] = useState<IPortListItem[]>([])
   const [formData, setFormData] = useState<Record<string, any>>({})
   // 保存每个子组件的 ref
   const childRefs = useRef<Record<number, any>>({})
 
   useEffect(() => {
-    getPortConfigApi().then(res => { setGoodsList(res) })
+    getPortConfigApi().then(res => {
+      const portList = Object.entries(res).map(([port, open]) => ({ port: Number(port), open: open == '1' }))
+      setGoodsList(portList)
+    })
   }, [])
+
   const handleChildChange = (idx: number, values: any) => {
     setFormData(pre => ({ ...pre, [idx]: values }))
     console.log(`child form change`);
   }
 
+  const togglePortStatus = (port: number) => {
+    setGoodsList(prev => prev.map(item =>
+      item.port === port ? { ...item, open: !item.open } : item
+    ));
+  };
+
   // 父组件点击时收集所有子表单值（会执行 validateFields）
   const handleCollect = async () => {
     const result: Record<number, any> = {}
-    for (let i = 0; i < goodsList.length; i++) {
-      const child = childRefs.current[i]
-      if (!child) continue
+    for (const { port, open } of goodsList) {
+      const child = childRefs.current[port];
+      if (!child) continue;
       if (child.validate) {
         try {
-          result[i] = await child.validate()
+          result[port] = { ...await child.validate(), open }
         } catch (err) {
-          // 验证失败，也可以改为 child.getValues()
-          result[i] = { __error: err }
+          result[port] = { __error: err, open }
         }
-      } else if (child.getValues) {
-        result[i] = child.getValues()
+        // 这里不进行校验
+      } else if (child.getFieldsValue) {
+        result[port] = { ...child.getFieldsValue(), open }
       } else {
-        result[i] = {}
+        result[port] = { open }
       }
     }
-    setFormData(result)
     console.log('收集到的所有表单值：', result)
+    setFormData(result)
   }
 
   return (
-    <div className="text-3xl flex flex-col items-center">
-      <div style={{ marginBottom: 12 }}>
-        <Button type="primary" onClick={handleCollect}>收集所有表单值</Button>
+    <div className='flex'>
+      <div className="text-3xl flex flex-col items-center">
+        <div style={{ marginBottom: 12 }}>
+          <Button type="primary" onClick={handleCollect}>收集所有表单值</Button>
+        </div>
+
+        <Row gutter={[16, 16]} style={{ width: '600px' }}>
+          {
+            goodsList.map(({ port, open }) => (
+              <Col span={12} key={port}>
+                <div style={{ border: '1px solid #ddd', padding: '16px', borderRadius: '4px' }}>
+                  <div style={{ marginBottom: '12px' }}>
+                    <Form.Item label="是否显示" valuePropName="checked" style={{ marginBottom: 0 }}>
+                      <Switch checked={open} onChange={() => togglePortStatus(port)} />
+                    </Form.Item>
+                  </div>
+                  <TestChild
+                    hidden={!open}
+                    ref={el => (childRefs.current[port] = el)}
+                    port={port}
+                    onChange={handleChildChange}
+                    initialValues={formData[port] || {}}
+                  />
+                </div>
+              </Col>
+            ))
+          }
+        </Row>
       </div>
-      {
-        goodsList.map((x, xIndex) => (
-          <div key={xIndex}>
-            {x ? '表单' + xIndex : '表单' + xIndex + '(空)'}
-            <TestChild
-              ref={el => (childRefs.current[xIndex] = el)}
-              index={xIndex}
-              onChange={handleChildChange}
-              initialValues={formData[xIndex] || {}}
-            />
-          </div>
-        ))
-      }
       <div>
-        <pre style={{ background: '#fafafa', padding: 12 }}>{JSON.stringify(formData, null, 2)}</pre>
+        <pre style={{ background: '#fafafa', padding: 12, fontSize: 12 }}>{JSON.stringify(formData, null, 2)}</pre>
       </div>
     </div>
   )
 }
+
 interface TestProps {
-  index?: number
+  port?: number
   initialValues?: any
-  onChange?: (index: number, values: any) => void
+  onChange?: (portIdx: number, values: any) => void
+  hidden?: boolean
 }
 
 // 使用 forwardRef 暴露方法给父组件
-const TestChild = forwardRef<any, TestProps>(({ index = 0, initialValues = {}, onChange }, ref) => {
+const TestChild = forwardRef<any, TestProps>(({ port = 0, initialValues = {}, onChange, hidden }, ref) => {
   const [form] = Form.useForm()
 
   useImperativeHandle(ref, () => ({
@@ -89,15 +115,15 @@ const TestChild = forwardRef<any, TestProps>(({ index = 0, initialValues = {}, o
     form.setFieldsValue(initialValues)
   }, [initialValues])
   return (
-    <Card style={{ border: '1px solid red', padding: 16 }}>
+    <Card style={{ border: '1px solid red', padding: 16 }} hidden={hidden}>
       <Form form={form} initialValues={initialValues} layout='vertical'
-        onValuesChange={(_, all) => { onChange?.(index, all) }}
+        onValuesChange={(_, all) => onChange?.(port, all)}
       >
         <Form.Item label="姓名" name="name" required rules={[{ required: true, message: '请输入姓名' }]}>
           <Input placeholder="请输入姓名" />
         </Form.Item>
-        <Form.Item label='是否同意' name='agree' valuePropName='checked'>
-          <Switch />
+        <Form.Item label='年龄' name='age'>
+          <Input placeholder="请输入年龄" />
         </Form.Item>
       </Form>
     </Card>
